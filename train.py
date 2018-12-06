@@ -18,7 +18,7 @@ import net_sphere
 
 parser = argparse.ArgumentParser(description='PyTorch sphereface')
 parser.add_argument('--net','-n', default='sphere20a', type=str)
-parser.add_argument('--dataset', default='/home/jm/workspace/face_recognition/sphereface_pytorch/data/casia.zip', type=str)
+parser.add_argument('--dataset', default='/home/mlpa/ssd/face_recognition/sphereface_pytorch/data/casia.zip', type=str)
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
 parser.add_argument('--bs', default=256, type=int, help='')
 args = parser.parse_args()
@@ -51,10 +51,10 @@ def dataset_load(name,filename,pindex,cacheobj,zfile):
     for i in range(5):
         src_pts.append([int(split[2*i+2]),int(split[2*i+3])])
 
-    data = np.frombuffer(zfile.read(nameinzip),np.uint8)
+    data = np.frombuffer(zfile.read('casia/'+ nameinzip),np.uint8)
     img = cv2.imdecode(data,1)
-    img = alignment(img,src_pts)
-
+    # img = alignment(img,src_pts)
+    print(img.shape)
     if ':train' in name:
         if random.random()>0.5: img = cv2.flip(img,1)
         if random.random()>0.5:
@@ -123,7 +123,7 @@ def train(epoch,args):
         correct += predicted.eq(targets.data).cpu().sum()
 
         printoneline(dt(),'Te=%d Loss=%.4f | AccT=%.4f%% (%d/%d) %.4f %.2f %d'
-            % (epoch,train_loss/(batch_idx+1), 100.0*correct.data[0]/total, correct, total,
+            % (epoch,train_loss/(batch_idx+1), 100.0*correct/total, correct, total,
             lossd, criterion.lamb, criterion.it))
         batch_idx += 1
     print('')
@@ -137,7 +137,6 @@ criterion = net_sphere.AngleLoss()
 
 print('start: time={}'.format(dt()))
 for epoch in range(0, 20):
-    print(epoch)
     if epoch in [0,10,15,18]:
         if epoch!=0: args.lr *= 0.1
         optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
