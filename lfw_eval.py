@@ -34,7 +34,7 @@ def KFold(n=6000, n_folds=10, shuffle=False):
     folds = []
     base = list(range(n))
     for i in range(n_folds):
-        test = base[i*n/n_folds:(i+1)*n/n_folds]
+        test = base[int(i*n/n_folds):int((i+1)*n/n_folds)]
         train = list(set(base)-set(test))
         folds.append([train,test])
     return folds
@@ -64,13 +64,14 @@ def find_best_threshold(thresholds, predicts):
 
 parser = argparse.ArgumentParser(description='PyTorch sphereface lfw')
 parser.add_argument('--net','-n', default='sphere20a', type=str)
-parser.add_argument('--lfw', default='../../dataset/face/lfw/lfw.zip', type=str)
-parser.add_argument('--model','-m', default='sphere20a.pth', type=str)
+parser.add_argument('--lfw', default='/home/jm/workspace/face_recognition/sphereface_pytorch/data/lfw.zip', type=str)
+parser.add_argument('--model','-m', default='/home/jm/workspace/face_recognition/sphereface_pytorch/sphere20a_19.pth', type=str)
 args = parser.parse_args()
 
 predicts=[]
 net = getattr(net_sphere,args.net)()
-net.load_state_dict(torch.load(args.model))
+m = torch.load(args.model)
+net.load_state_dict(m)
 net.cuda()
 net.eval()
 net.feature = True
@@ -120,7 +121,7 @@ accuracy = []
 thd = []
 folds = KFold(n=6000, n_folds=10, shuffle=False)
 thresholds = np.arange(-1.0, 1.0, 0.005)
-predicts = np.array(map(lambda line:line.strip('\n').split(), predicts))
+predicts = np.array(list(map(lambda line:line.strip('\n').split(), predicts)))
 for idx, (train, test) in enumerate(folds):
     best_thresh = find_best_threshold(thresholds, predicts[train])
     accuracy.append(eval_acc(best_thresh, predicts[test]))
