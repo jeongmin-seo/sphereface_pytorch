@@ -1,6 +1,7 @@
 import os
 from torch.utils.data import Dataset, DataLoader
 import torchvision.transforms as transforms
+import torch
 from PIL import Image
 
 
@@ -19,14 +20,17 @@ class FaceDataset(Dataset):
         cur_label = self.dic[cur_path]
         full_path = self.data_root + "/" + cur_path
         # full_path = os.path.join(self.data_root, cur_path)
-        img = Image.open(full_path)
+        img = Image.open(full_path).convert('RGB')
 
         if not transforms:
             print("Set your transforms")
             raise ValueError
-
         x = self.transform(img)
 
+        """
+        for i in range(3):
+            output[:,:, i] = x[i,:,:]
+        """
         return x, cur_label
 
 
@@ -71,7 +75,7 @@ class FaceDataLoader:
         training_set = FaceDataset(dic=self.train_image,
                                    data_root=self.data_path,
                                    transform=transforms.Compose([
-                                       transforms.Scale([250, 250]),
+                                       transforms.Scale([112, 96]),
                                        transforms.ToTensor()
                                    ]))
 
@@ -92,7 +96,7 @@ class FaceDataLoader:
         test_set = FaceDataset(dic=self.test_image,
                                data_root=self.data_path,
                                transform=transforms.Compose([
-                                   transforms.Scale([250, 250]),
+                                   transforms.Scale([112, 96]),
                                    transforms.ToTensor()
                                ]))
 

@@ -54,7 +54,7 @@ def dataset_load(name,filename,pindex,cacheobj,zfile):
     data = np.frombuffer(zfile.read('casia/'+ nameinzip),np.uint8)
     img = cv2.imdecode(data,1)
     # img = alignment(img,src_pts)
-    print(img.shape)
+
     if ':train' in name:
         if random.random()>0.5: img = cv2.flip(img,1)
         if random.random()>0.5:
