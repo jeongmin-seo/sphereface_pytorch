@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 import argparse
+import sys
 import numpy as np
 
 from custom_dataloader import FaceDataLoader
@@ -28,8 +29,8 @@ except AttributeError:
 parser = argparse.ArgumentParser(description='PyTorch sphereface for custom data')
 parser.add_argument('--net','-n', default='sphere20a', type=str)
 parser.add_argument('--data_root', default='./data/code (2)/deep_learning_data_x', type=str)
-parser.add_argument('--model_path', default='/home/mlpa/ssd/face_recognition/sphereface_pytorch/model/sphere20a_19.pth',type=str)
-parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
+parser.add_argument('--model_path', default='./model/sphere20a_19.pth',type=str)
+parser.add_argument('--lr', default=0.001, type=float, help='learning rate')
 parser.add_argument('--bs', default=256, type=int, help='')
 parser.add_argument('--epoch', default=1000, type=int, help='train epoch')
 args = parser.parse_args()
@@ -55,12 +56,26 @@ def set_fine_tune_model(_model_path, _n_class):
     return _model
 
 
+def save_model(model,filename):
+    state = model.state_dict()
+    for key in state: state[key] = state[key].clone().cpu()
+    torch.save(state, filename)
+
+
 def test_model_load(_model_path):
     _model = net_sphere.sphere20a(feature=True)
     state_dict = torch.load(_model_path)
     _model.load_state_dict(state_dict)
 
     return _model
+
+
+def printoneline(*argv):
+    s = ''
+    for arg in argv: s += str(arg) + ' '
+    s = s[:-1]
+    sys.stdout.write('\r'+s)
+    sys.stdout.flush()
 
 
 def fine_tune(_trian_loader, _model, n_epoch):
@@ -71,18 +86,29 @@ def fine_tune(_trian_loader, _model, n_epoch):
     _model.cuda()
     _model.train()
     for epoch in range(1, n_epoch+1):
-        print(epoch)
-        for i, (data, labels) in enumerate(_trian_loader):
+        correct = 0
+        train_loss = 0
+        total = 0
+        for batch_idx, (data, labels) in enumerate(_trian_loader):
             input_var = Variable(data, volatile=True).cuda(async=True)
             target_var = Variable(labels, volatile=True).cuda().long()
 
             output = _model(input_var)
+            _, predicted = torch.max(output[0].data, 1)
             loss = loss_func(output, target_var)
+
+            total += target_var.size(0)
+            train_loss += loss.data[0]
+            correct += predicted.eq(target_var.data).cpu().sum()
+            printoneline('Te=%d Loss=%.4f | AccT=%.4f (%d/%d)'
+                         % (epoch, train_loss / (batch_idx + 1), 100.0 * correct / float(total), correct, total))
 
             # compute gradient and do SGD step
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+
+        save_model(model, './%depoch.pth' % epoch)
 
     return _model
 
@@ -106,6 +132,7 @@ def save_gallery(_loader, _test_model):
 
     return gallery
 
+
 def calc_max_similarity(train_features, test_features):
 
     max_sim = None
@@ -125,7 +152,7 @@ def check_max(cur, max):
         return max
 
 
-def calc_accuracy(pred, true):
+def test_accuracy(pred, true):
     assert len(pred) == len(true)
     return (np.asarray(pred) == np.asarray(true)).sum()/len(true)
 
@@ -147,7 +174,7 @@ def eval_using_gallery(train_gallery, test_gallery):
         true_label.append(test_key)
         prediction.append(cur_result)
 
-    print(calc_accuracy(prediction, true_label))
+    print(test_accuracy(prediction, true_label))
     return prediction, true_label
 
 
@@ -158,11 +185,11 @@ if __name__=="__main__":
     data_loader = FaceDataLoader(batch_size=args.bs, num_workers=4, path=args.data_root, txt_path="./")
     train_loader, test_loader = data_loader.run()
 
-    """
-    model = set_fine_tune_model(args.model_path, 2000)
-    fine_tune(train_loader, model, args.epoch)
-    """
 
+    model = set_fine_tune_model(args.model_path, 515)
+    model = fine_tune(train_loader, model, args.epoch)
+
+    """
     test_model = test_model_load(args.model_path)
     train_gallery = save_gallery(train_loader, test_model)
     test_gallery = save_gallery(test_loader, test_model)
@@ -171,3 +198,4 @@ if __name__=="__main__":
     print(list(test_gallery.keys()))
 
     eval_using_gallery(train_gallery, test_gallery)
+    """

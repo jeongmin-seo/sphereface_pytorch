@@ -22,11 +22,16 @@ def write_text(save_content, train_test_type):
         with open(os.path.join("./", save_name), 'w') as f:
             write_line(save_content)
 
-
+max_label = 0
+class_count = {
+    'CASPEALR1':28,
+    'MultiPie':249,
+    'PF07':200,
+    'YaleB':38
+}
 for data_kind in os.listdir(data_root):
     data_kind_path = os.path.join(data_root, data_kind)
-
-    for variant_type in os.listdir(data_kind_path):
+    for i, variant_type in enumerate(os.listdir(data_kind_path)):
         variant_type_path = os.path.join(data_kind_path, variant_type)
 
         for train_test_type in os.listdir(variant_type_path):
@@ -38,7 +43,10 @@ for data_kind in os.listdir(data_root):
 
                 for data_name in os.listdir(label_path):
                     data_path = os.path.join(label_path, data_name)
-                    save_list.append([data_path.replace(data_root, ""), str(int(label)-1)])
+                    save_list.append([data_path.replace(data_root, ""), str(int(label) + max_label -1)])
 
             write_text(save_list, train_test_type)
+    max_label = max_label + class_count[data_kind]
+    print(data_kind, max_label)
+
 
