@@ -6,6 +6,7 @@ from torch.autograd import Variable
 import argparse
 import sys
 import numpy as np
+from multiprocessing import Process
 
 from custom_dataloader import FaceDataLoader
 from matlab_cp2tform import get_similarity_transform_for_cv2
@@ -29,10 +30,11 @@ except AttributeError:
 parser = argparse.ArgumentParser(description='PyTorch sphereface for custom data')
 parser.add_argument('--net','-n', default='sphere20a', type=str)
 parser.add_argument('--data_root', default='./data/code (2)/deep_learning_data_x', type=str)
-parser.add_argument('--model_path', default='./model/sphere20a_19.pth',type=str)
+parser.add_argument('--model_path', default='./sphereface_model/11epoch.pth',type=str)
 parser.add_argument('--lr', default=0.001, type=float, help='learning rate')
 parser.add_argument('--bs', default=256, type=int, help='')
 parser.add_argument('--epoch', default=1000, type=int, help='train epoch')
+parser.add_argument('--is_finetune', default='false', type=str, choices=['false', 'true'])
 args = parser.parse_args()
 
 
@@ -48,11 +50,10 @@ def set_fine_tune_model(_model_path, _n_class):
     in_feature = _model.fc6.in_features
     _model.fc6 = net_sphere.AngleLinear(in_feature, _n_class)
 
-    """
     for i, param in enumerate(_model.parameters()):
-        if i < 2:
+        if i < 6:
             param.requires_grad = False
-    """
+
     return _model
 
 
@@ -62,8 +63,11 @@ def save_model(model,filename):
     torch.save(state, filename)
 
 
-def test_model_load(_model_path):
+def test_model_load(_model_path, _n_class):
     _model = net_sphere.sphere20a(feature=True)
+    in_feature = _model.fc6.in_features
+    _model.fc6 = net_sphere.AngleLinear(in_feature, _n_class)
+
     state_dict = torch.load(_model_path)
     _model.load_state_dict(state_dict)
 
@@ -109,6 +113,7 @@ def fine_tune(_trian_loader, _model, n_epoch):
             optimizer.step()
 
         save_model(model, './%depoch.pth' % epoch)
+        print("\n")
 
     return _model
 
@@ -124,8 +129,9 @@ def save_gallery(_loader, _test_model):
         features = features.data.cpu().numpy()
 
         for i, label in enumerate(labels):
+            label = int(label)
             if not label in list(gallery.keys()):
-                gallery[label] = [features[i]]  # TODO: feature to cpu version
+                gallery[label] = [features[i]]
                 continue
 
             gallery[label].append(features[i])
@@ -148,13 +154,13 @@ def check_max(cur, max):
     if not max or max < cur:
         return cur
 
-    elif max > cur:
+    elif max >= cur:
         return max
 
 
 def test_accuracy(pred, true):
     assert len(pred) == len(true)
-    return (np.asarray(pred) == np.asarray(true)).sum()/len(true)
+    return (np.asarray(pred) == np.asarray(true)).sum()/float(len(true))
 
 
 def eval_using_gallery(train_gallery, test_gallery):
@@ -167,14 +173,27 @@ def eval_using_gallery(train_gallery, test_gallery):
         for train_key in list(train_gallery.keys()):
             calc_sim = calc_max_similarity(train_gallery[train_key], test_gallery[test_key])
 
+            
+            # why doesn't work?
             if not cur_similarity or cur_similarity < calc_sim:
+                cur_result = train_key
+                cur_similarity = calc_sim
+            
+
+            if not cur_similarity:
+                cur_result = train_key
+                cur_similarity = calc_sim
+
+            elif cur_similarity < calc_sim:
                 cur_result = train_key
                 cur_similarity = calc_sim
 
         true_label.append(test_key)
         prediction.append(cur_result)
+        print(prediction)
+        print(true_label)
+        print(test_accuracy(prediction, true_label))
 
-    print(test_accuracy(prediction, true_label))
     return prediction, true_label
 
 
@@ -185,17 +204,14 @@ if __name__=="__main__":
     data_loader = FaceDataLoader(batch_size=args.bs, num_workers=4, path=args.data_root, txt_path="./")
     train_loader, test_loader = data_loader.run()
 
+    if args.is_finetune.lower() == 'true':
+        model = set_fine_tune_model(args.model_path, 515)
+        test_model = fine_tune(train_loader, model, args.epoch)
 
-    model = set_fine_tune_model(args.model_path, 515)
-    model = fine_tune(train_loader, model, args.epoch)
+    else:
+        test_model = test_model_load(args.model_path, 515)
 
-    """
-    test_model = test_model_load(args.model_path)
     train_gallery = save_gallery(train_loader, test_model)
     test_gallery = save_gallery(test_loader, test_model)
 
-    print(list(train_gallery.keys()))
-    print(list(test_gallery.keys()))
-
     eval_using_gallery(train_gallery, test_gallery)
-    """
